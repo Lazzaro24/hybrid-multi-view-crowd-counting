@@ -1,0 +1,41 @@
+[project]
+name = "HMVCC"
+version = "0.1.0"
+description = "Hybrid Multi-View Crowd Counting"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    "geomloss>=0.3.1",
+    "matplotlib>=3.11.0",
+    "numpy>=2.5.1",
+    "opencv-python>=5.0.0.93",
+    "pillow>=12.3.0",
+    "psutil>=7.2.2",
+    "pykeops>=2.3",
+    "scikit-learn>=1.9.0",
+    "scipy>=1.18.0",
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+    "tqdm>=4.70.0",
+]
+
+[tool.ruff]
+line-length = 120                               # the width the code is written at
+extend-exclude = ["losses/ot_loss/geomloss"]    # vendored copy of the GeomLoss library
+
+[tool.ruff.lint]
+ignore = ["E402"]   # scripts put src/ on sys.path before importing the project's modules
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch", marker = "sys_platform == 'win32'" }
+]
+torchvision = [
+    { index = "pytorch", marker = "sys_platform == 'win32'" }
+]

@@ -1,0 +1,4 @@
+{
+  "scene_71": "h_actual=5093 / w_actual=1066 -- ~12-16x the corpus median (check_wld_map_paras.py sweep across all 50 scenes; every other scene clusters between h_actual=203 and h_actual=787). r0=0.4561, more than 6x smaller than the next-lowest scene in the corpus (scene_38, r0=3.1175) -- r0 divides directly into the h_actual/w_actual formula, so an anomalously small r0 explains the blowup mechanically. Corroborated independently by near-zero (1.5-5%) camera coverage for all 5 K-means-selected cameras, and a loss=0.000 / 4.96s-per-iteration anomaly (vs. 1.0-1.6s/it for every other scene) in an actual Stage 1 training run. Not yet determined whether r0 is a genuine upstream data issue specific to this scene or something else -- excluded pending further investigation, not because the cause is fully understood.",
+  "scene_52": "crashed my run just now"
+}

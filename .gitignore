@@ -1,0 +1,21 @@
+# environment
+.venv/
+__pycache__/
+*.pyc
+.python-version
+.ruff_cache/
+
+# datasets (downloaded separately, see README section 2)
+datasets/*/data/
+
+# weights and run outputs (the final weights are a separate download, see README section 4)
+*.pth
+*.pt
+dist/
+runs/*
+!runs/final_weights/
+logs/
+diagnostics/
+figs/
+full_length_*/
+camera_ablation/

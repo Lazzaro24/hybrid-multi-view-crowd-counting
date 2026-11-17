@@ -1,0 +1,30 @@
+# Virtual environments -- rebuilt fresh inside the container by uv sync
+.venv
+venv
+__pycache__/
+*.pyc
+
+# Git metadata -- not needed inside the image
+.git
+.gitignore
+
+# Datasets -- these are large and will be provided at runtime via
+# `docker run -v <host_path>:/workspace`, not baked into the image.
+# Adjust the path(s) below to match wherever your actual data lives.
+datasets/*/data
+datasets/**/data
+*.mp4
+*.avi
+
+# Model checkpoints / training outputs -- also large, also better mounted
+# at runtime than baked into the image.
+checkpoints/
+*.pth
+*.pt
+outputs/
+
+# Editor/OS/cache cruft
+.pytest_cache
+.mypy_cache
+*.egg-info
+.DS_Store

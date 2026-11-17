@@ -1,0 +1,9 @@
+Hybrid Multi-View Crowd Counting
+Copyright 2026 Lazzaro Kacani
+
+This product includes software derived from SynMVCrowd
+(https://github.com/zqyq/SynMVCrowd), licensed under the Apache License 2.0,
+and a vendored copy of GeomLoss (https://github.com/jeanfeydy/geomloss),
+licensed under the MIT License, and a ResNet definition from torchvision
+(https://github.com/pytorch/vision), licensed under the BSD 3-Clause License.
+See THIRD_PARTY_NOTICES.md for details.
