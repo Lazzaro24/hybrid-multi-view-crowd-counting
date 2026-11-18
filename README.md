@@ -1,6 +1,6 @@
 # Hybrid Multi-View Crowd Counting
 
-Source code of the master's thesis *Hybrid Multi-View Crowd Counting* (Lazzaro Kacani, Hochschule München, 2026).
+Source code of the master's thesis *Hybrid Multi-View Crowd Counting* (Lazzaro Kaçani, Hochschule München, 2026).
 The model fuses synchronized camera views onto a bird's-eye-view (BEV) ground plane and counts people there. It has
 three parts: a frozen 2D backbone (dilated ResNet-18), a fusion **neck** (homography projection or BEVFormer-style
 deformable cross-attention), and a **head**: either a single density decoder or a hybrid of a dense expert (crowds)
@@ -125,8 +125,22 @@ Both loaders (`datasets/multiview_detection.py`) compute their reference points 
 ## 3. Training
 
 All models share one budget unit: **one iteration = one frame, 5 views, 3 random 200 × 200 BEV patches, batch 1**.
-The MSE baseline trains for 200 epochs × 1,400 iterations = **280k iterations**. The budget-matched proposed chains
-use the same total.
+Baseline (Gaussian) trains for 200 epochs × 1,400 iterations = **280k iterations**. The budget-matched proposed
+chains use the same total.
+
+**Model names.** The launchers, folders and this README use run names; the thesis names the models after their neck
+and head:
+
+| thesis | run name |
+|---|---|
+| Baseline (Gaussian) | `run_1` (MSE on Gaussian density maps) |
+| Baseline (OT) | `ot` |
+| Attention-Hybrid (the proposed model) | h1_casa |
+| Homography-Hybrid | h1_hom |
+| Homography-Hybrid (joint) | J |
+| Homography-Rule | hybrid_hom |
+| Homography-Decoder, Homography-Decoder (OT) | H0-control, H0-OT |
+| Head ablation at the short budget: Decoder, Decoder (long), Pointwise mask, Window mask, Performance-based | H0, H0-long, H1, H2, H3 |
 
 ### 3.0 2D backbone pretraining (shared by every model)
 
@@ -155,7 +169,7 @@ copy runs\train_2d\<timestamp>\best.pth runs\train_2d\new_best\resnet18_2d_pretr
 selection, decoder), with a frozen backbone. Results go to `runs/baseline/<run_name>/` (`best.pth`, `last.pth`).
 
 ```powershell
-# Baseline (MSE), "run_1": SGD 1e-4, warmup + cosine, 200 epochs, from scratch
+# Baseline (Gaussian), "run_1": SGD 1e-4, warmup + cosine, 200 epochs, from scratch
 .\remote_scripts\run_remote_baseline_train.ps1 -Backbone runs\train_2d\new_best\resnet18_2d_pretrained_ep4.pth `
     -Loss mse -Optimizer sgd -Lr 1e-4 -LrSchedule cosine -InitFrom "" -Epochs 200 -Patience 0 -RunName run_1
 
@@ -168,17 +182,17 @@ Add `-Resume` to continue `runs\baseline\<RunName>\last.pth`, or `-TrainBackbone
 the released code does (not used for the reported numbers). Run without the launcher:
 `uv run python training_scripts/train_baseline.py --backbone <...> --run_name run_1 --loss mse --val_every 5`.
 
-### 3.2 Proposed, legacy design: learned router (the "router lineage", H1)
+### 3.2 Proposed head: learned router (Attention-Hybrid, Homography-Hybrid)
 
-The design the thesis started from. A dense and a sparse expert are trained on an oracle (ground-truth density) mask,
-then a learned router chooses between them per BEV cell. Trainer: `training_scripts/train_proposed_multiscene.py`
-(settings in `training_scripts/proposed_trainer/config.py`, `--help` lists every flag). The full budget-matched chain
-runs in one launcher:
+The proposed head of the thesis (the "router lineage"; H1 in the head ablation). A dense and a sparse expert are
+trained on an oracle (ground-truth density) mask, then a learned router chooses between them per BEV cell. Trainer:
+`training_scripts/train_proposed_multiscene.py` (settings in `training_scripts/proposed_trainer/config.py`, `--help`
+lists every flag). The full budget-matched chain runs in one launcher:
 
 ```powershell
-# h1_hom: homography_256 fusion
+# h1_hom (Homography-Hybrid): homography_256 fusion
 .\remote_scripts\run_remote_budget_ca_sa_h1.ps1 -Neck homography_256 -OutDir full_length_dense_mask_homography
-# h1_casa: the same recipe on the ca_sa attention fusion
+# h1_casa (Attention-Hybrid): the same recipe on the ca_sa attention fusion
 .\remote_scripts\run_remote_budget_ca_sa_h1.ps1 -Neck ca_sa -OutDir full_length_dense_mask
 ```
 
@@ -203,10 +217,10 @@ handing on final weights (the command is in the launcher's header). The trainer 
 checkpoints of the early experiments (it detects the layout from the checkpoint); their launchers are
 `run_remote_stage123_stride8.ps1` and related scripts.
 
-### 3.3 Proposed, dense-first hybrid (density rule, no router)
+### 3.3 Density-rule variant (Homography-Rule, no router)
 
-The head the diagnosis of the router lineage led to. The steps run one after the other, each on frozen weights of
-the previous one:
+A tested variant of the proposed head: a fixed density rule replaces the learned router, and the sparse expert is
+deeper. The steps run one after the other, each on frozen weights of the previous one:
 
 1. **Fusion** (homography_256), the same as step 2 above. Its decoder is **H0**.
 2. **D2:** dense expert + adapter on the frozen fusion, MSE only, EMA.
@@ -215,9 +229,9 @@ the previous one:
    is at least a threshold, sparse peaks elsewhere. The threshold is chosen by **val GAME3**.
 
 ```powershell
-# budget-matched chain (50 + 60 + 90 = 200 epochs) + H0-control (decoder fine-tuned for the same budget)
+# budget-matched chain (50 + 60 + 90 = 200 epochs) + H0-control (Homography-Decoder: decoder fine-tuned for the same budget)
 .\remote_scripts\run_remote_budget_homography_hybrid.ps1 -WithVal
-# then the baseline's OT fine-tune on both arms, H0-OT and hybrid-OT (needs the weights of the chain above in the same OutDir)
+# then the baseline's OT fine-tune on both arms, H0-OT (Homography-Decoder (OT)) and hybrid-OT (needs the weights of the chain above in the same OutDir)
 .\remote_scripts\run_remote_ot_stage_homography_hybrid.ps1 -WithVal
 ```
 
@@ -228,9 +242,9 @@ Main options: `-Seeds 42,7` (head seeds; the fusion is trained once), `-Neck`, `
 `routing_s<seed>.txt` and the paper-protocol JSONs. The short-budget versions (30-epoch fusion, 2 seeds) are in
 `run_remote_dense_recipe.ps1`.
 
-### 3.4 Proposed, joint training (no curriculum)
+### 3.4 Joint training (Homography-Hybrid, joint)
 
-The control for the curriculum of 3.2: the same h1_hom model (fresh homography_256 fusion, both experts, router)
+The control for the staged training of 3.2: the same h1_hom model (fresh homography_256 fusion, both experts, router)
 trained in **one loop** for the same 280k iterations. The loss is the sum of the stage losses: Stage 2 masked MSE for
 the dense expert, the OT step's sparse loss × 0.01, Tversky for the router and the fused-map MSE (weights 1).
 Gradients flow end to end; final weights, no EMA.
@@ -265,7 +279,7 @@ uv run python scripts/package_final_weights.py --verify
 | model | file |
 |---|---|
 | Baseline (OT) | `runs/baseline/ot/best.pth` |
-| Baseline (MSE) | `runs/baseline/run_1/best.pth` |
+| Baseline (Gaussian) | `runs/baseline/run_1/best.pth` |
 | h1_hom | `runs/full_length_dense_mask_homography/4_router_anchor/multiscene_final_stage_4_..._fs.pth` |
 | h1_casa | `runs/full_length_dense_mask_final/4_router_anchor/multiscene_final_stage_4_..._fs.pth` |
 | hybrid_hom | `runs/full_length_hybrid/3_sparse_s42/multiscene_final_stage_2_bud200_homography_256_S4D2_s42.pth` |
@@ -273,7 +287,7 @@ uv run python scripts/package_final_weights.py --verify
 | H0-control | `runs/full_length_hybrid/4_h0_control/homography_256/last.pth` |
 | 2D backbone | `runs/train_2d/new_best/resnet18_2d_pretrained_ep4.pth` |
 | Baseline (OT), final weights | `runs/baseline/ot_frozen/last.pth` |
-| Baseline (MSE), final weights | `runs/baseline/run_1/last.pth` |
+| Baseline (Gaussian), final weights | `runs/baseline/run_1/last.pth` |
 | H0 (short budget) | `runs/neck_ablation/ablation_v2/homography_256/last.pth` |
 | H0-long (short budget) | `runs/head_ablation/homography_256/h0_long/1_decoder/homography_256/last.pth` |
 | H1 (short budget) | `runs/head_ablation/homography_256/og_mask/4_router_anchor/multiscene_final_stage_4_..._fs.pth` |
@@ -304,24 +318,24 @@ Commands for the final weights:
 uv run python evaluation/evaluate_paper_protocol.py --model baseline --weights runs/baseline/run_1/best.pth
 uv run python evaluation/evaluate_paper_protocol.py --model baseline --weights runs/baseline/ot/best.pth
 
-# Proposed, router lineage (--model proposed): learned router, or the GT mask in its place (routing ceiling)
+# Learned-router head (--model proposed), Homography-Hybrid: learned router, or the GT mask in its place (routing ceiling)
 uv run python evaluation/evaluate_paper_protocol.py --model proposed --routing learned `
     --weights runs/full_length_dense_mask_homography/4_router_anchor/multiscene_final_stage_4_bud200_homography_256_dout0.7_cw0.01_genloss_a0.7_ro_anchor0.1_fs.pth
 uv run python evaluation/evaluate_paper_protocol.py --model proposed --routing oracle `
     --weights runs/full_length_dense_mask_homography/4_router_anchor/multiscene_final_stage_4_bud200_homography_256_dout0.7_cw0.01_genloss_a0.7_ro_anchor0.1_fs.pth
 #   oracle on the Stage 4 weights = the Stage 3 oracle exactly (Stage 4 trains the router only)
-#   h1_casa: the same with runs/full_length_dense_mask_final/4_router_anchor/multiscene_final_stage_4_bud200_ca_sa_..._fs.pth
+#   Attention-Hybrid (h1_casa): the same with runs/full_length_dense_mask_final/4_router_anchor/multiscene_final_stage_4_bud200_ca_sa_..._fs.pth
 
-# Proposed, dense-first hybrid: the density rule (threshold from the val sweep, here 0.1 p/m^2; "p" = sparse as peaks)
+# Density-rule variant, Homography-Rule: the density rule (threshold from the val sweep, here 0.1 p/m^2; "p" = sparse as peaks)
 uv run python evaluation/evaluate_paper_protocol.py --model proposed --routing dzone0.1p `
     --weights runs/full_length_hybrid/3_sparse_s42/multiscene_final_stage_2_bud200_homography_256_S4D2_s42.pth
 #   or read the threshold file the sweep wrote:  --routing @runs/full_length_hybrid/eval/routing_s42.txt
 #   dense expert alone:                          --routing dense --weights runs/full_length_hybrid/2_dense_s42/multiscene_final_stage_2_bud200_homography_256_D2_s42.pth
 
-# Baseline decoder on a neck-ablation fusion (H0, H0-control, H0-OT): --model ablation
+# Baseline decoder on a neck-ablation fusion (H0; H0-control = Homography-Decoder; H0-OT): --model ablation
 uv run python evaluation/evaluate_paper_protocol.py --model ablation --weights runs/full_length_hybrid/4_h0_control/homography_256/last.pth
 
-# Proposed, joint run J
+# Homography-Hybrid (joint), run J
 uv run python evaluation/evaluate_paper_protocol.py --model proposed --routing learned `
     --weights full_length_joint_homography/1_joint/multiscene_final_stage_joint_hom_s0.01_wr1_wf1.pth
 ```
@@ -367,9 +381,9 @@ The figure scripts in `scripts/visualisation/` read the weights and result files
 |---|---|
 | Neck ablation (RQ1): homography_256, ca, sa_ca, ca_sa, bev3, hca, mvha with the same decoder, loss and budget | `.\remote_scripts\run_neck_ablation.ps1 -RunName ablation_v2` → `training_scripts/neck_ablation.py` (summary: `--run_name <run> --summarize`) |
 | Head ablation (RQ2): routing variants, sparse-expert variants, dense recipe | `run_head_ablation_arm.ps1`, `run_remote_ablation_neck_routing.ps1`, `run_remote_sparse_expert_s012.ps1`, `run_remote_dense_recipe.ps1` |
-| Camera ablation (RQ3): 3/5/7/10 views, at test time (tier B) and trained at that view count (tier A) | `.\remote_scripts\run_camera_ablation_all.ps1` → `training_scripts/camera_ablation.py`; tables: `uv run python evaluation/summarize_camera_ablation.py` |
-| Cross-dataset: Wildtrack and MultiviewX, zero-shot and fine-tuned on 10 % / 100 % of their train split (3,600 steps, backbone trainable; seeds 0–2 for baseline_ot and h1_casa at 100 %) | `.\remote_scripts\run_cross_dataset.ps1` (`-Parts check,zeroshot,finetune`, `-Seeds`, `-Only`) → `evaluation/evaluate_cross_dataset.py`, `training_scripts/finetune_cross_dataset.py`; results in `runs/cross_dataset/{check,zero_shot,finetune}/` |
-| Joint training vs curriculum | see [3.4](#34-proposed-joint-training-no-curriculum) |
+| Camera count: 3/5/7/10 views, at test time (tier B) and trained at that view count (tier A) | `.\remote_scripts\run_camera_ablation_all.ps1` → `training_scripts/camera_ablation.py`; tables: `uv run python evaluation/summarize_camera_ablation.py` |
+| Cross-dataset: Wildtrack and MultiviewX, zero-shot and fine-tuned on 10% / 100% of their train split (3,600 steps, backbone trainable; seeds 0–2 for baseline_ot and h1_casa at 100%) | `.\remote_scripts\run_cross_dataset.ps1` (`-Parts check,zeroshot,finetune`, `-Seeds`, `-Only`) → `evaluation/evaluate_cross_dataset.py`, `training_scripts/finetune_cross_dataset.py`; results in `runs/cross_dataset/{check,zero_shot,finetune}/` |
+| Joint training vs staged training | see [3.4](#34-joint-training-homography-hybrid-joint) |
 
 The diagnostics behind the design decisions (expert, router and density-rule analyses, threshold sweeps, zone error
 decomposition, camera geometry) are in `scripts/diagnosis/`; each script explains its inputs and outputs in its
@@ -384,7 +398,7 @@ docstring.
 | `models/` | `backbone/` (dilated ResNet-18), `neck/baseline/` (homography projector, view selection), `neck/proposed/` (spatial cross-attention, deformable attention, BEV encoder, multi-view height attention), `head/baseline/` (decoder), `head/proposed/routing.py` (dense / sparse experts, router) |
 | `losses/` | Gaussian MSE, OT losses (`ot_loss/genloss_synmvcrowd.py` = the baseline's, `genloss.py`, `sparse_ot_loss.py`), vendored GeomLoss |
 | `datasets/` | the SynMVCrowd dataset class and K-means camera selection JSONs, the Wildtrack / MultiviewX loaders (`multiview_detection.py`), and the (git-ignored) `data/` folders |
-| `training_scripts/` | trainers: `train_2d_pretrain.py`, `train_baseline.py`, `neck_ablation.py`, `train_proposed_multiscene.py` (entry point for the curriculum stages and `--joint`) + `proposed_trainer/` (config, CLI, model, losses, targets, validation), `camera_ablation.py`, `finetune_cross_dataset.py`, `make_stage1_from_ablation.py` |
+| `training_scripts/` | trainers: `train_2d_pretrain.py`, `train_baseline.py`, `neck_ablation.py`, `train_proposed_multiscene.py` (entry point for the training stages and `--joint`) + `proposed_trainer/` (config, CLI, model, losses, targets, validation), `camera_ablation.py`, `finetune_cross_dataset.py`, `make_stage1_from_ablation.py` |
 | `evaluation/` | `evaluate_paper_protocol.py` (headline numbers), `evaluate_cross_dataset.py`, `analyze_samples.py` (intervals and breakdowns of the per-sample results), `model_cost.py`, map-quality, occlusion, per-frame, view-dropout and train-bias evaluations, `compare_map_quality.py`, `summarize_camera_ablation.py`, `metrics/` |
 | `remote_scripts/` | PowerShell launchers for every training and evaluation chain (see [Launchers](#launchers)) |
 | `utils/` | reference-point cache and projection, scene/frame exclusions, oracle mask, camera-slot handling, calibration and off-axis checks, weather index |
@@ -408,7 +422,7 @@ If you use this code, please cite the thesis:
 
 ```bibtex
 @mastersthesis{Kacani_2026_HybridMVCC,
-    author = {Lazzaro Kacani},
+    author = {Lazzaro Ka{\c{c}}ani},
     title  = {Hybrid Multi-View Crowd Counting},
     school = {Hochschule M{\"u}nchen University of Applied Sciences},
     year   = {2026}

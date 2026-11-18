@@ -631,7 +631,7 @@ EFFECTS = [
     ("Proposed instead of baseline pipeline\n(same head, both with OT fine-tune)", (25.0, 7.4, 40.8)),
     ("MSE instead of OT fine-tune,\nbaseline pipeline", (20.7, -2.9, 46.2)),
     ("MSE instead of OT fine-tune,\nproposed pipeline (decoder)", (11.2, -7.9, 30.7)),
-    ("Single loop instead of curriculum\n(Homography-Hybrid)", (18.9, 10.9, 26.7)),
+    ("Single loop instead of stages\n(Homography-Hybrid)", (18.9, 10.9, 26.7)),
     ("Components under study", None),
     ("Learned instead of oracle routing\n(Homography-Hybrid)", (11.6, 3.0, 22.2)),
     ("Attention instead of homography neck\n(learned-router head)", (10.3, -0.9, 20.2)),
